@@ -1,4 +1,5 @@
 from collections import defaultdict
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from models import Loan
 
@@ -6,23 +7,28 @@ ALERT_THRESHOLD = 0.35
 
 
 def summary(db: Session, org_id: int) -> dict:
-    loans = db.query(Loan).filter(Loan.org_id == org_id).all()
-    total = len(loans)
-    exposure = sum(l.loan_amount for l in loans)
+    mine = Loan.org_id == org_id
+    total, exposure, prob_sum, loss = db.query(
+        func.count(Loan.id), func.coalesce(func.sum(Loan.loan_amount), 0.0),
+        func.coalesce(func.sum(Loan.default_probability), 0.0),
+        func.coalesce(func.sum(Loan.default_probability * Loan.loan_amount), 0.0),
+    ).filter(mine).one()
     bands = {"Low": 0, "Medium": 0, "High": 0}
+    for band, n in db.query(Loan.risk_band, func.count(Loan.id)).filter(mine).group_by(Loan.risk_band):
+        if band in bands:
+            bands[band] = n
+    # only two light columns are loaded for the monthly trend (not the explanation JSON)
     trend = defaultdict(lambda: [0.0, 0])
-    expected_loss = 0.0
-    for l in loans:
-        bands[l.risk_band] += 1
-        expected_loss += l.default_probability * l.loan_amount
-        key = l.created_at.strftime("%Y-%m")
-        trend[key][0] += l.default_probability
-        trend[key][1] += 1
+    for created, prob in db.query(Loan.created_at, Loan.default_probability).filter(mine):
+        if created is not None:
+            key = created.strftime("%Y-%m")
+            trend[key][0] += prob
+            trend[key][1] += 1
     return {
         "total_loans": total,
         "total_exposure": round(exposure, 2),
-        "expected_default_rate": round(sum(l.default_probability for l in loans) / total, 4) if total else 0,
-        "expected_loss": round(expected_loss, 2),
+        "expected_default_rate": round(prob_sum / total, 4) if total else 0,
+        "expected_loss": round(loss, 2),
         "high_risk_count": bands["High"],
         "risk_bands": [{"band": k, "count": v} for k, v in bands.items()],
         "trend": [{"month": k, "avg_risk": round(v[0] / v[1], 4)} for k, v in sorted(trend.items())],

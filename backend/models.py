@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, JSON
 from database import Base
 
@@ -35,4 +35,4 @@ class Loan(Base):
     risk_band = Column(String, index=True)
     decision = Column(String)
     explanation = Column(JSON)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))  # naive UTC

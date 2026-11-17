@@ -19,7 +19,7 @@ export default function Upload() {
     mutationFn: () => { const form = new FormData(); form.append('file', file); return api('/portfolio/upload', { method: 'POST', form }) },
     onSuccess: (r) => {
       ['summary', 'loans', 'alerts'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }))
-      toast.success(`Scored and imported ${r.imported} loans`)
+      r.skipped ? toast.warning(`Imported ${r.imported} loans, skipped ${r.skipped}`) : toast.success(`Scored and imported ${r.imported} loans`)
     },
     onError: (e) => toast.error(e.message),
   })
@@ -58,6 +58,15 @@ export default function Upload() {
             {mut.isSuccess && (
               <div className="fade-in mt-4 flex items-center gap-3 rounded-lg bg-green-50 p-4 text-sm text-green-800 dark:bg-green-500/10 dark:text-green-400">
                 <CheckCircle2 size={18} />Imported {mut.data.imported} loans. <Link to="/" className="font-semibold underline">View dashboard</Link>
+              </div>
+            )}
+            {mut.isSuccess && mut.data.skipped > 0 && (
+              <div className="fade-in mt-3 rounded-lg bg-amber-50 p-4 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-400">
+                <p className="font-medium">{mut.data.skipped} rows were skipped:</p>
+                <ul className="mt-1 list-disc pl-5 text-xs">
+                  {mut.data.errors.map((e) => <li key={e.row}>Row {e.row}: {e.error}</li>)}
+                </ul>
+                {mut.data.skipped > mut.data.errors.length && <p className="mt-1 text-xs">...and more.</p>}
               </div>
             )}
           </div>

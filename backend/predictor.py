@@ -20,6 +20,8 @@ LOW_T, HIGH_T = 0.15, 0.35
 @lru_cache(maxsize=1)
 def _load():
     bundle = joblib.load(MODEL_PATH)
+    if set(bundle["features"]) != set(LABELS):
+        raise RuntimeError(f"model.joblib features {bundle['features']} do not match LABELS {list(LABELS)}")
     return bundle["model"], bundle["features"], shap.TreeExplainer(bundle["model"])
 
 

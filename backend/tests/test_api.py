@@ -73,3 +73,43 @@ def test_org_isolation(client):
     loan_id = client.get("/portfolio/loans?limit=1", headers=h1).json()[0]["id"]
     assert client.get(f"/portfolio/loans/{loan_id}", headers=h1).status_code == 200
     assert client.get(f"/portfolio/loans/{loan_id}", headers=h2).status_code == 404
+
+
+def test_upload_skips_and_reports_bad_rows(client):
+    h = login(client)
+    before = client.get("/portfolio/summary", headers=h).json()["total_loans"]
+    csv = "borrower_name,age,income,loan_amount,interest_rate,debt_to_income,credit_utilization,past_delinquencies,credit_history_years\n"
+    csv += "Good,30,50000,10000,10,30,40,0,6\n"
+    csv += "NegAge,-5,50000,10000,10,30,40,0,6\n"
+    csv += "Text,30,abc,10000,10,30,40,0,6\n"
+    csv += "Huge,30,50000,10000,10,30,9999,0,6\n"
+    csv += "Blank,30,,10000,10,30,40,0,6\n"
+    r = client.post("/portfolio/upload", files={"file": ("l.csv", io.BytesIO(csv.encode()), "text/csv")}, headers=h)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["imported"] == 1 and body["skipped"] == 4
+    assert sorted(e["row"] for e in body["errors"]) == [3, 4, 5, 6]
+    assert client.get("/portfolio/summary", headers=h).json()["total_loans"] == before + 1
+
+
+def test_upload_created_at_buckets_trend(client):
+    h = login(client)
+    csv = "age,income,loan_amount,interest_rate,debt_to_income,credit_utilization,past_delinquencies,credit_history_years,created_at\n"
+    csv += "30,50000,10000,10,30,40,0,6,2020-03-15\n"
+    client.post("/portfolio/upload", files={"file": ("l.csv", io.BytesIO(csv.encode()), "text/csv")}, headers=h)
+    months = [t["month"] for t in client.get("/portfolio/summary", headers=h).json()["trend"]]
+    assert "2020-03" in months
+
+
+def test_loan_list_validation_and_literal_search(client):
+    h = login(client)
+    assert client.get("/portfolio/loans?limit=-1", headers=h).status_code == 422
+    assert client.get("/portfolio/loans?offset=-1", headers=h).status_code == 422
+    assert client.get("/portfolio/loans?q=%25", headers=h).json() == []   # '%' is literal, not a wildcard
+
+
+def test_login_rate_limited(client):
+    for _ in range(5):
+        client.post("/auth/login", json={"email": "nobody@example.com", "password": "x"})
+    r = client.post("/auth/login", json={"email": "nobody@example.com", "password": "x"})
+    assert r.status_code == 429

@@ -94,6 +94,8 @@ CredLensAI/
 
 Interactive docs are available at `/docs` on the backend.
 
+Rows that fail validation (same rules as `/predict`) are skipped and reported back with their row numbers. Optional `created_at` (a date) lets you import historical loans into the right month of the trend chart.
+
 CSV columns: `borrower_name` (optional), `age, income, loan_amount, interest_rate, debt_to_income, credit_utilization, past_delinquencies, credit_history_years`.
 
 ## Run it locally
@@ -142,7 +144,7 @@ The tests cover login protection, prediction output (probability plus 5 factors)
    - Runtime: Docker, Dockerfile path `backend/Dockerfile`, build context = repo root.
    - Environment variables:
      - `DATABASE_URL`: your Neon connection string
-     - `SECRET_KEY`: a long random string
+     - `SECRET_KEY`: a long random string (**required**; the backend refuses to start on Render without it)
      - `CORS_ORIGINS`: your Vercel URL (no trailing slash)
 3. **Frontend:** import the repo into [Vercel](https://vercel.com).
    - Root directory: `frontend` (framework preset: Vite).
