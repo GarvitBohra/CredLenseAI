@@ -15,9 +15,12 @@ export async function api(path, { method = 'GET', body, form } = {}) {
   } catch {
     throw new Error('Cannot reach the server. If the free backend was idle, wait ~30s and retry.')
   }
-  if (res.status === 401 && token) {
+  if (res.status === 401 && path !== '/auth/login') {
+    // Session is missing or expired: clear everything so the login page doesn't bounce back
     localStorage.removeItem('token')
+    localStorage.removeItem('user')
     window.location.href = '/login'
+    throw new Error('Session expired. Please log in again.')
   }
   if (!res.ok) {
     let detail = 'Something went wrong'
